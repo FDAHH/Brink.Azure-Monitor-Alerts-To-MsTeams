@@ -7,6 +7,6 @@
     "ContainerName": "mycontainer",
     "ConfigurationFilename": "configuration.json",
     "APPINSIGHTS_INSTRUMENTATIONKEY": "dummy",
-    "CaptureAlerts":  "true" 
+    "CaptureAlerts": "true"
   }
 }
