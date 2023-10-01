@@ -13,6 +13,8 @@ using AzureMonitorAlertToTeams.QueryResultFetchers;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Azure.Monitor.Query;
+using Azure.Identity;
 
 [assembly: FunctionsStartup(typeof(Startup))]
 
@@ -24,6 +26,7 @@ namespace AzureMonitorAlertToTeams
         {
             builder.Services.AddLogging();
             builder.Services.AddHttpClient();
+            builder.Services.AddSingleton<LogsQueryClient>();
             builder.Services.AddSingleton<ITelemetryInitializer, TelemetryEnrichment>();
             builder.Services.AddSingleton<ApplicationInsightsAlertProcessor>();
             builder.Services.AddSingleton<LogAlertsV2AlertProcessor>();

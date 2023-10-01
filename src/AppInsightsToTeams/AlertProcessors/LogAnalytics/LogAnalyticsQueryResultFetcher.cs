@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Azure.Monitor.Query;
 using AzureMonitorAlertToTeams.Configurations;
 using AzureMonitorAlertToTeams.Models;
 using AzureMonitorAlertToTeams.QueryResultFetchers;
@@ -11,6 +12,7 @@ using Newtonsoft.Json;
 
 namespace AzureMonitorAlertToTeams.AlertProcessors.LogAnalytics
 {
+    #warning TODO: should use system assign identity and probalby there is a package or lib? https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.query-readme?view=azure-dotnet
     public interface ILogAnalyticsQueryResultFetcher : IQueryResultFetcher
     {
     };
@@ -18,16 +20,20 @@ namespace AzureMonitorAlertToTeams.AlertProcessors.LogAnalytics
     public class LogAnalyticsQueryResultFetcher : ILogAnalyticsQueryResultFetcher
     {
         private readonly HttpClient _httpClient;
+        private readonly LogsQueryClient _logsQueryClient;
+
         private readonly ILogger _log;
 
-        public LogAnalyticsQueryResultFetcher(ILogger<LogAnalyticsQueryResultFetcher> log, IHttpClientFactory httpClientFactory)
+        public LogAnalyticsQueryResultFetcher(ILogger<LogAnalyticsQueryResultFetcher> log, IHttpClientFactory httpClientFactory, LogsQueryClient logsQueryClient)
         {
             _log = log;
+            _logsQueryClient = logsQueryClient;
             _httpClient = httpClientFactory.CreateClient();
         }
 
         public async Task<ResultSet> FetchLogQueryResultsAsync(string url, string jsonConfiguration)
         {
+            
             var configuration = JsonConvert.DeserializeObject<LogAnalyticsConfiguration>(jsonConfiguration);
 
             if (configuration?.ClientId == null)

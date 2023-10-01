@@ -8,6 +8,8 @@
 	<Version>1.0.0.0</Version>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.10.1" />
+    <PackageReference Include="Azure.Monitor.Query" Version="1.2.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Extensions" Version="1.1.0" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Http" Version="3.2.0" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage" Version="5.0.1" />
@@ -29,4 +31,8 @@
   <ItemGroup>
     <Folder Include="Properties\" />
   </ItemGroup>
+    <ItemGroup>
+    <ProjectReference Include="..\JiraApiClient\JiraApiClient.csproj" />
+  </ItemGroup>
+
 </Project>

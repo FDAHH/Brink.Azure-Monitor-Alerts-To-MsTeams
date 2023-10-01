@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using AzureMonitorAlertToTeams.Models;
+using JiraApiClient;
 using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -20,12 +22,15 @@ namespace AzureMonitorAlertToTeams
     public class AzureMonitorAlertToTeamFunction
     {
         private readonly HttpClient _httpClient;
+        private readonly JiraApiClient.Client _jiraApiClient;
+
         private readonly ILogger _log;
         private readonly IAlertProcessorRepository _alertProcessorRepository;
 
         public AzureMonitorAlertToTeamFunction(IHttpClientFactory httpClientFactory, ILogger<AzureMonitorAlertToTeamFunction> log, IAlertProcessorRepository alertProcessorRepository)
         {
             _httpClient = httpClientFactory.CreateClient();
+            _jiraApiClient = new JiraApiClient.Client(httpClientFactory.CreateClient());
             _log = log;
             _alertProcessorRepository = alertProcessorRepository;
         }
@@ -38,6 +43,7 @@ namespace AzureMonitorAlertToTeams
                 Connection = "ConfigurationStorageConnection")]
             Stream configurationStream)
         {
+#warning need a way to retrive secrets from keyvault
             var operationId = req.HttpContext.Features.Get<RequestTelemetry>().Context.Operation.Id;
 
             string requestBody;
@@ -47,15 +53,25 @@ namespace AzureMonitorAlertToTeams
             }
 
             await CaptureAlertToFileIfRequestedAsync(operationId, requestBody);
-            var (teamsMessage, teamsChannelConnectorWebhookUrl) = await ProcessAlertAsync(requestBody, configurationStream);
-            await PostToChannelAsync(teamsChannelConnectorWebhookUrl, teamsMessage);
+            var (teamsMessage, teamsChannelConnectorWebhookUrl, alertProcessingResult) = await ProcessAlertAsync(requestBody, configurationStream);
+
+            // if we create a ticket, this needs to be done first to get the jira issue id if we want to use it in the other channels
+            if (alertProcessingResult.SendTeamsMessage)
+            {
+                await PostToChannelAsync(teamsChannelConnectorWebhookUrl, teamsMessage);
+            }
+            if (alertProcessingResult.SendJiraMessage)
+            {
+                await PostToJiraAsync("string action", new object());
+            }
 
             return new OkResult();
         }
 
-        public async Task<(string, string)> ProcessAlertAsync(string alertJson, Stream configuration)
+        public async Task<(string, string, AlertProcessingResult)> ProcessAlertAsync(string alertJson, Stream configuration)
         {
             var alertConfigurations = await ReadConfigurationAsync(configuration);
+
 
             var alert = JsonConvert.DeserializeObject<Alert>(alertJson);
             if (alert?.Data == null)
@@ -63,6 +79,7 @@ namespace AzureMonitorAlertToTeams
                 _log.LogError("Invalid alert body: \"{AlertJson}\".", alertJson);
                 throw new ArgumentException("Invalid request", nameof(alertJson));
             }
+            var result = new AlertProcessingResult { ProcessedAlert = alert, SendEmailMessage = false, SendJiraMessage = false, SendTeamsMessage = false };
 
             var alertConfiguration = alertConfigurations.FirstOrDefault(ac =>
                 ac.AlertRule.Equals(alert.Data.Essentials.AlertRule, StringComparison.InvariantCultureIgnoreCase)
@@ -126,7 +143,7 @@ namespace AzureMonitorAlertToTeams
 
             _log.LogDebug(teamsMessageTemplate);
 
-            return (teamsMessageTemplate, alertConfiguration.TeamsChannelConnectorWebhookUrl);
+            return (teamsMessageTemplate, alertConfiguration.TeamsChannelConnectorWebhookUrl, result);
         }
 
         public async Task PostToChannelAsync(string teamsChannelConnectorWebhookUrl, string teamsMessageTemplate)
@@ -137,6 +154,42 @@ namespace AzureMonitorAlertToTeams
             {
                 _log.LogError("Posting to teams failed with status code {StatusCode}: {Reason}", response.StatusCode, response.ReasonPhrase);
                 throw new InvalidOperationException();
+            }
+        }
+
+#warning ToDO: find correct signature für call, Jira more complex since we might need to Create or Update a ticket...
+        public async Task PostToJiraAsync(string action, object data)
+        {
+#warning ToDO: setup IssueUpdateDetails
+            try
+            {
+                var issueUpdateDetails = new IssueUpdateDetails
+                {
+
+                };
+                var result = string.Empty;
+
+                switch (action)
+                {
+                    case "new":
+                        result = "new";
+                        var createdIssue = await _jiraApiClient.CreateIssueAsync(issueUpdateDetails);
+                        break;
+                    case "update":
+#warning TODO: where / how do we geht the issue to update?
+                        var issueIdOrkey = "";
+                        var comment = await _jiraApiClient.AddCommentAsync(issueIdOrkey, new Comment { Body = "update" });
+                        result = "update";
+                        break;
+                    default:
+                        throw new ApiException("Unkown Action", 400, null, null, null);
+                }
+
+            }
+            catch (ApiException e)
+            {
+                _log.LogError("Jira action : {action} failed {StatusCode}: {Reason}", action, e.StatusCode, e.Message);
+                throw;
             }
         }
 
